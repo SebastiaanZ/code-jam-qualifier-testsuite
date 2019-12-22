@@ -6,13 +6,20 @@ of our server who would like to qualify for a place in a Code Jam.
 """
 from __future__ import annotations
 
+import ast
 import datetime
 import io
+import os
+import pathlib
+import re
+import subprocess
 import sys
 import textwrap
 import timeit
 import typing
 import unittest
+
+import mccabe
 
 import test_qualifier
 
@@ -36,6 +43,8 @@ class QualifierTestRunner:
         title: str = "Python Discord Code Jam: Qualifier Test Suite",
         user: str = "",
         console_width: int = 100,
+        max_complexity: int = -1,
+        flake8_report: str = "",
         *,
         tb_locals: bool = False,
     ) -> None:
@@ -55,6 +64,9 @@ class QualifierTestRunner:
 
         self.title = title
         self.user = user
+
+        self.max_complexity = max_complexity
+        self.flake8_report = flake8_report
 
     def instantiate_resultclass(self) -> unittest.TestResult:
         """Create an instance of the result class for a test run."""
@@ -80,20 +92,33 @@ class QualifierTestRunner:
         self.stream.write_separator("=")
         if hasattr(result, "test_results"):
             self.stream.write(
-                f"{' '*30} PASSED   FAILED   TOTAL"
+                f"{' '*30} PASSED   FAILED   TOTAL   RESULT"
                 "\n"
             )
             for section, section_results in result.test_results.items():
                 section_name = section.__doc__.splitlines()[0].rstrip(".!?")
                 section_name = textwrap.shorten(section_name, width=30, placeholder="...")
+                passed, failed, total = section_results
+                result = "PASS" if passed == total else "FAIL"
                 self.stream.write(
                     f"{section_name:<30}  "
-                    f"{section_results.passed:^6}   "
-                    f"{section_results.failed:^6}  "
-                    f"{section_results.total:^5}"
+                    f"{passed:^6}   "
+                    f"{failed:^6}  "
+                    f"{total:^5}    "
+                    f"{result}"
                     "\n"
                 )
             self.stream.write_separator("-")
+
+        self.stream.write(f"Maximum McCabe Complexity: {self.max_complexity:>2d}\n")
+
+        flake8_errors = len(self.flake8_report.splitlines())
+        self.stream.write(f"Number of flake8 errors:   {flake8_errors:>2d}\n")
+        if self.verbosity > 1:
+            self.stream.writeln("Flake8 Report:")
+            self.stream.write(textwrap.indent(self.flake8_report, prefix="  "))
+
+        self.stream.write_separator("-")
         self.stream.writeln(f"Total running time: {duration:.3f}s")
 
     def run(self, test: unittest.TestSuite) -> None:
@@ -112,12 +137,51 @@ class QualifierTestRunner:
         self.write_footer(result, duration)
 
 
+def get_max_mccabe_complexity(path: pathlib.Path) -> int:
+    """Calculate the maximum McCabe Complexity for this file."""
+    with path.open("r", encoding="utf-8") as f:
+        code = f.read()
+
+    try:
+        tree = compile(code, path, "exec", ast.PyCF_ONLY_AST)
+    except SyntaxError:
+        return -1
+
+    mccabe.McCabeChecker.max_complexity = 0
+    complexity = re.compile(r"\((?P<complexity>\d+)\)")
+    max_complexity = max(
+        int(complexity.search(text)["complexity"])
+        for _, _, text, _ in mccabe.McCabeChecker(tree, path).run()
+    )
+    return max_complexity
+
+
 def run_ascii_testsuite(file: str, verbosity: int, outfile: str) -> None:
     """Run an ascii-based test suite."""
     stream = sys.stderr if outfile == "STDERR" else io.StringIO()
+
+    path = file.split(".")
+    path[-1] += ".py"
+    path = pathlib.Path(*path)
+
+    max_complexity = get_max_mccabe_complexity(path)
+    flake8_report = subprocess.check_output(
+        ["pipenv", "run", "flake8", "--exit-zero", "--select", "E,F,W", "--max-line-length", "10", str(path)],
+        cwd=os.getcwd(),
+        stderr=subprocess.STDOUT,
+        encoding="utf-8"
+    )
+
     test_suite = load_testsuite(test_qualifier, file)
-    runner = QualifierTestRunner(user="Ves Zappa", verbosity=verbosity, stream=stream)
+    runner = QualifierTestRunner(
+        user="Ves Zappa",
+        verbosity=verbosity,
+        stream=stream,
+        max_complexity=max_complexity,
+        flake8_report=flake8_report,
+    )
     runner.run(test_suite)
+
     if outfile != "STDERR":
         with open(outfile, "w", encoding="utf-8") as f:
             f.write(stream.getvalue())
