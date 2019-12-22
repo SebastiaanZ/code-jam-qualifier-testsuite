@@ -1,10 +1,10 @@
 [flake8]
-ignore=
+exclude =
+	testsuite/__init__.py
+ignore =
     # Annotations
     TYP002, TYP003, TYP101, TYP102
 
     # Docstrings
     D100, D107,
-max-line-length=100
-exclude=
-    __init__.py
+max-line-length = 100

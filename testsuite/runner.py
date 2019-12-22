@@ -14,7 +14,10 @@ import timeit
 import typing
 import unittest
 
-from .result import QualifierTestResult, StreamWrapper
+import test_qualifier
+
+from testsuite.result import QualifierTestResult, StreamWrapper
+from testsuite.testcase import load_testsuite
 
 
 class QualifierTestRunner:
@@ -62,7 +65,9 @@ class QualifierTestRunner:
         self.stream.write_separator("=")
         self.stream.write(f"{self.title}\n")
         self.stream.write_separator("=")
-        self.stream.writeln(f"Date: {datetime.datetime.utcnow().strftime(r'%Y-%m-%d %H:%M:%S')}")
+        self.stream.writeln(
+            f"Date: {datetime.datetime.utcnow().strftime(r'%Y-%m-%d %H:%M:%S')} UTC"
+        )
         self.stream.writeln(f"User: {self.user}")
         self.stream.writeln()
 
@@ -105,3 +110,15 @@ class QualifierTestRunner:
         # Record the end time
         duration = timeit.default_timer() - start
         self.write_footer(result, duration)
+
+
+def run_ascii_testsuite(file: str, verbosity: int, outfile: str) -> None:
+    """Run an ascii-based test suite."""
+    stream = sys.stderr if outfile == "STDERR" else io.StringIO()
+    test_suite = load_testsuite(test_qualifier, file)
+    runner = QualifierTestRunner(user="Ves Zappa", verbosity=verbosity, stream=stream)
+    runner.run(test_suite)
+    if outfile != "STDERR":
+        with open(outfile, "w", encoding="utf-8") as f:
+            f.write(stream.getvalue())
+        stream.close()

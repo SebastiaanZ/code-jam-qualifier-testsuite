@@ -148,8 +148,6 @@ class QualifierTestResult(unittest.TestResult):
         if type(test) != self.current_testclass:
             self.switch_testclass(test)
 
-        self.subtest_failed = False
-
     def stopTest(self, test: unittest.TestCase) -> None:
         """Finalize the test phase of an individual test method."""
         test_description = test.shortDescription().rstrip(".!?")
@@ -180,5 +178,6 @@ class QualifierTestResult(unittest.TestResult):
         if outcome:
             self.subtest_results.failed += 1
             self.subtest_outcomes.append((subtest, outcome))
+            return
 
         self.subtest_results.passed += 1

@@ -1,35 +1,43 @@
-import types
-import unittest
+import argparse
 
-import test_qualifier
-
-from testsuite.runner import QualifierTestRunner
+from testsuite.runner import run_ascii_testsuite
 
 
-def load_testsuite(
-    test_module: types.ModuleType,
-    filename: str = "qualifier"
-) -> unittest.TestSuite:
-    """
-    Prepare a test suite to test a qualifier entry.
+parser = argparse.ArgumentParser(
+    prog="python -m testsuite",
+    description="Python Discord Code Jam: Qualifier Test Suite"
+)
+parser.set_defaults(ascii=False, verbosity=0)
+subparsers = parser.add_subparsers(title="subcommands")
+ascii_parser = subparsers.add_parser("ascii", help="testsuite ascii mode")
+ascii_parser.add_argument(
+    "--file",
+    action="store",
+    help="importable name of the file to test (default: qualifier)",
+    default="qualifier",
+)
+ascii_parser.add_argument(
+    "--verbose", "-v",
+    action="count",
+    help="verbosity of the output: '-v' or '-vv'",
+    default=0,
+    dest="verbosity",
+)
+ascii_parser.add_argument(
+    "--outfile",
+    action="store",
+    help="file to write the output to (default: STDERR)",
+    default="STDERR"
+)
+ascii_parser.set_defaults(ascii=True)
+args = parser.parse_args()
 
-    The `test_module` should contain the test classes that we want use and `filename` should refer
-    to the **importable** name of the solution we want to test.
-    """
-    test_loader = unittest.TestLoader()
-    test_loader.sortTestMethodsUsing = None
+if args.ascii:
+    kwargs = vars(args)
+    del kwargs['ascii']
+    run_ascii_testsuite(**kwargs)
 
-    tests = []
-    for name in dir(test_module):
-        obj = getattr(test_module, name)
-        if isinstance(obj, type) and issubclass(obj, unittest.TestCase):
-            obj.module_to_test = filename
-            tests.append(test_loader.loadTestsFromTestCase(obj))
-
-    return unittest.TestSuite(tests)
-
-
-if __name__ == "__main__":
-    test_suite = load_testsuite(test_qualifier, "qualifier")
-    runner = QualifierTestRunner(user="Ves Zappa", verbosity=2)
-    runner.run(test_suite)
+# if __name__ == "__main__":
+#     test_suite = load_testsuite(test_qualifier, "qualifier")
+#     runner = QualifierTestRunner(user="Ves Zappa", verbosity=2)
+#     runner.run(test_suite)
